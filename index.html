@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f2746">
+  <title>IELTS Speaking Studio</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="connection-banner hidden" id="connectionBanner"></div>
+
+  <section class="auth-page" id="authPage">
+    <div class="auth-visual">
+      <div class="logo-mark">IS</div>
+      <p class="eyebrow">IELTS SPEAKING STUDIO</p>
+      <h1>让练习、作业与反馈<br>真正连在一起。</h1>
+      <p>面向老师和学生的线上雅思口语工作台。题目、录制与反馈跨设备实时同步。</p>
+      <div class="auth-benefits"><span>✦ 教师私有题库</span><span>✦ 学生音视频作业</span><span>✦ 可追踪的批改反馈</span></div>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-panel-heading"><p class="eyebrow">WELCOME</p><h2>进入你的工作台</h2><p>使用账号和密码登录，或注册一个新身份。</p></div>
+      <form id="signInForm" class="auth-form">
+        <h3>登录</h3>
+        <label>账号<input id="signInAccount" autocomplete="username" placeholder="输入账号" required></label>
+        <label>密码<input id="signInPassword" type="password" autocomplete="current-password" placeholder="输入密码" required></label>
+        <button class="button primary wide" type="submit">登录工作台 <span>→</span></button>
+      </form>
+      <form id="signUpForm" class="auth-form signup-form">
+        <h3>注册新账号</h3>
+        <div class="split-fields"><label>用户名称<input id="signUpName" maxlength="40" placeholder="例如：陈老师" required></label><label>身份<select id="signUpRole"><option value="student">学生</option><option value="teacher">老师</option></select></label></div>
+        <div class="split-fields"><label>账号<input id="signUpAccount" maxlength="24" autocomplete="username" placeholder="3–24 位字母、数字或 _" required></label><label>密码<input id="signUpPassword" type="password" minlength="6" autocomplete="new-password" placeholder="至少 6 位" required></label></div>
+        <button class="button secondary wide" type="submit">注册并进入</button>
+      </form>
+      <p class="auth-message" id="authMessage" aria-live="polite"></p>
+      <p class="auth-note">账号会转换为内部登录标识，不需要填写邮箱。部署时请在 Supabase 关闭邮箱确认。</p>
+    </div>
+  </section>
+
+  <section class="student-app hidden" id="studentApp">
+    <aside class="student-rail"><div class="student-brand"><span>IS</span><b>Speaking<br>Studio</b></div><div class="rail-step active"><i>01</i><span>我的作业</span></div><div class="rail-step"><i>02</i><span>完成录制</span></div><div class="rail-step"><i>03</i><span>接收反馈</span></div><div class="student-rail-foot"><span id="studentAvatar">S</span><small id="studentRailName"></small></div></aside>
+    <main class="student-main">
+      <header class="student-header"><div><p class="eyebrow">STUDENT DESK</p><h1 id="studentGreeting">你好</h1><p>把老师布置的题目，完成成一次清晰、有节奏的表达。</p></div><div class="header-actions"><button class="icon-button" id="studentRefreshBtn" title="刷新">↻</button><button class="button quiet" data-logout>退出登录</button></div></header>
+      <section class="student-stats" id="studentStats"></section>
+      <section class="student-layout">
+        <div class="student-tasks-card"><div class="section-heading"><div><p class="eyebrow">ASSIGNED WORK</p><h2>老师布置的任务</h2></div><span class="soft-pill" id="studentTaskCount">0 项</span></div><div id="studentTaskList" class="student-task-list"></div></div>
+        <aside class="student-tip"><span>✦</span><h3>一次只专注一项</h3><p>先看清题目，再开始录制。提交后可在这里收到老师的分数、文字和语音建议。</p></aside>
+      </section>
+      <section class="practice-card"><div class="practice-card-head"><div><p class="eyebrow">SUBMIT YOUR RESPONSE</p><h2>完成并提交录制</h2></div><span id="recordStatusTag" class="soft-pill">请选择作业</span></div><div class="practice-select-row"><label>选择作业<select id="studentAssignmentSelect"></select></label><span id="studentAssignmentDue" class="due-chip"></span></div><div id="studentAssignmentQuestions" class="question-sheet"></div><div class="record-controls"><div class="record-mode"><button class="mode-button active" data-student-mode="audio">● 语音</button><button class="mode-button" data-student-mode="video">▣ 视频</button></div><button class="record-button" id="studentRecordBtn">● 开始录制</button><button class="button primary" id="studentSubmitBtn">提交给老师</button></div><p id="studentRecordStatus" class="record-status">选择作业后，可录制语音或视频。</p><div id="studentMediaPreview" class="media-preview"></div><label class="reflection-label">自我复盘（可选）<textarea id="studentReflection" placeholder="这次最不满意的部分是什么？希望老师重点听哪里？"></textarea></label></section>
+      <section class="feedback-section"><div class="section-heading"><div><p class="eyebrow">YOUR FEEDBACK</p><h2>老师的反馈</h2></div></div><div id="studentFeedbackList" class="feedback-grid"></div></section>
+    </main>
+  </section>
+
+  <section class="teacher-app hidden" id="teacherApp">
+    <aside class="teacher-sidebar"><div class="teacher-brand"><span>IS</span><div><b>Speaking Studio</b><small>TEACHER CONSOLE</small></div></div><div class="teacher-nav"><a href="#teacherOverview">总览</a><a href="#questionBank">我的题库</a><a href="#assignmentBuilder">布置作业</a><a href="#studentManagement">学生管理</a><a href="#submissionReview">提交批改</a></div><div class="teacher-account"><span id="teacherAvatar">T</span><div><b id="teacherRailName"></b><small>教师账号</small></div><button data-logout title="退出登录">↪</button></div></aside>
+    <main class="teacher-main">
+      <header class="teacher-header" id="teacherOverview"><div><p class="eyebrow">TEACHER CONSOLE</p><h1 id="teacherGreeting">教学总览</h1><p>组织题目、布置任务、查看每一位学生的完成情况。</p></div><button class="button quiet" id="teacherRefreshBtn">↻ 刷新数据</button></header>
+      <section class="teacher-metrics" id="teacherMetrics"></section>
+      <section class="teacher-section question-bank-section" id="questionBank"><div class="section-heading dark"><div><p class="eyebrow">QUESTION LIBRARY</p><h2>我的私有题库</h2><p>编辑题目、关联 Part 3 追问，或从 Word / 文本导入。</p></div></div><div class="question-bank-layout"><form class="teacher-form" id="questionForm"><input id="editingQuestionId" type="hidden"><div class="form-grid"><label>考试部分<select id="questionPart"><option value="Part 1">Part 1</option><option value="Part 2 & 3">Part 2 &amp; 3</option></select></label><label>标签<input id="questionTags" placeholder="Hometown, Routine"></label><label class="wide">题目名称<input id="questionTitle" placeholder="例如：Daily routines"></label><label class="wide">题干<textarea id="questionPrompt" placeholder="例如：Do you usually plan your day in advance?"></textarea></label><label class="wide">Part 3 关联追问（每行一题）<textarea id="questionP3" placeholder="例如：Why do people need routines?"></textarea></label></div><div class="form-actions"><button class="button primary" type="submit" id="questionSaveBtn">保存题目</button><button class="button quiet" type="button" id="questionResetBtn">清空</button></div><div class="word-import"><select id="wordImportPart"><option value="Part 1">按 Part 1 导入</option><option value="Part 2 & 3">按 Part 2 &amp; 3 导入</option></select><input id="wordImportInput" type="file" accept=".docx,.txt,.md"><button class="button quiet" type="button" id="wordImportBtn">导入 Word / 文本</button></div></form><div class="question-catalog"><div class="catalog-head"><h3>题库列表</h3><input id="questionSearch" placeholder="搜索题目、标签或题干"></div><div id="teacherQuestionList" class="question-catalog-list"></div></div></div></section>
+      <section class="teacher-section assignment-section" id="assignmentBuilder"><div class="section-heading dark"><div><p class="eyebrow">ASSIGNMENT BUILDER</p><h2>勾选题目，发送给学生</h2><p>已发送作业保留题目快照，后续修改题库不会影响学生收到的内容。</p></div><span id="questionSelectionCount" class="selection-pill">已选 0 题</span></div><form id="assignmentForm" class="assignment-form"><div class="assignment-top-fields"><label>作业名称（可选）<input id="assignmentTitle" placeholder="例如：本周口语任务"></label><label>发送给<select id="assignmentStudent"></select></label><label>截止时间<input id="assignmentDue" type="datetime-local"></label></div><label>作业要求（可选）<textarea id="assignmentInstructions" placeholder="例如：Part 1 每题 2–4 句；P2 先准备 1 分钟，再陈述 2 分钟。"></textarea></label><div class="assignment-picker-head"><input id="assignmentQuestionSearch" placeholder="搜索并勾选题库题目"><span id="assignmentPickerHint">至少选择一道题目</span></div><div id="assignmentQuestionPicker" class="assignment-question-picker"></div><button class="button orange" type="submit">发送作业给学生 →</button></form></section>
+      <section class="teacher-section student-management" id="studentManagement"><div class="section-heading dark"><div><p class="eyebrow">STUDENT MANAGEMENT</p><h2>每位学生的作业看板</h2><p>这里展示已布置的题目、截止时间和提交/反馈状态。</p></div></div><div id="teacherStudentBoard" class="teacher-student-board"></div></section>
+      <section class="teacher-section review-section" id="submissionReview"><div class="section-heading dark"><div><p class="eyebrow">SUBMISSION REVIEW</p><h2>学生提交与批改</h2></div></div><div class="review-layout"><div id="teacherSubmissionList" class="submission-list"></div><div id="teacherReviewPanel" class="teacher-review-panel"><div class="empty-review">从左侧选择一份学生提交，开始评分和反馈。</div></div></div></section>
+    </main>
+  </section>
+
+  <div class="toast" id="toast"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
