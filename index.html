@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#0f2746">
   <title>IELTS Speaking Studio</title>
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./platform-enhancements.css">
 </head>
 <body>
   <div class="connection-banner hidden" id="connectionBanner"></div>
@@ -19,26 +20,21 @@
       <div class="auth-benefits"><span>✦ 教师私有题库</span><span>✦ 学生音视频作业</span><span>✦ 可追踪的批改反馈</span></div>
     </div>
     <div class="auth-panel">
-      <div class="auth-panel-heading"><p class="eyebrow">WELCOME</p><h2>进入你的工作台</h2><p>使用账号和密码登录，或注册一个新身份。</p></div>
+      <div class="auth-panel-heading"><p class="eyebrow">WELCOME</p><h2>进入你的工作台</h2><p>使用账号和密码登录；新用户将在独立页面完成注册。</p></div>
       <form id="signInForm" class="auth-form">
         <h3>登录</h3>
         <label>账号<input id="signInAccount" autocomplete="username" placeholder="输入账号" required></label>
         <label>密码<input id="signInPassword" type="password" autocomplete="current-password" placeholder="输入密码" required></label>
         <button class="button primary wide" type="submit">登录工作台 <span>→</span></button>
       </form>
-      <form id="signUpForm" class="auth-form signup-form">
-        <h3>注册新账号</h3>
-        <div class="split-fields"><label>用户名称<input id="signUpName" maxlength="40" placeholder="例如：陈老师" required></label><label>身份<select id="signUpRole"><option value="student">学生</option><option value="teacher">老师</option></select></label></div>
-        <div class="split-fields"><label>账号<input id="signUpAccount" maxlength="24" autocomplete="username" placeholder="3–24 位字母、数字或 _" required></label><label>密码<input id="signUpPassword" type="password" minlength="6" autocomplete="new-password" placeholder="至少 6 位" required></label></div>
-        <button class="button secondary wide" type="submit">注册并进入</button>
-      </form>
+      <a class="register-link-card" href="./register.html"><span>NEW ACCOUNT</span><b>创建学习账号 <i>→</i></b><small>学生、教师与首次管理员均在独立注册页完成。</small></a>
       <p class="auth-message" id="authMessage" aria-live="polite"></p>
       <p class="auth-note">账号会转换为内部登录标识，不需要填写邮箱。部署时请在 Supabase 关闭邮箱确认。</p>
     </div>
   </section>
 
   <section class="student-app hidden" id="studentApp">
-    <aside class="student-rail"><div class="student-brand"><span>IS</span><b>Speaking<br>Studio</b></div><div class="rail-step active"><i>01</i><span>我的作业</span></div><div class="rail-step"><i>02</i><span>完成录制</span></div><div class="rail-step"><i>03</i><span>接收反馈</span></div><div class="student-rail-foot"><span id="studentAvatar">S</span><small id="studentRailName"></small></div></aside>
+    <aside class="student-rail"><div class="student-brand"><span>IS</span><b>Speaking<br>Studio</b></div><div class="rail-step active"><i>01</i><span>我的作业</span></div><div class="rail-step"><i>02</i><span>完成录制</span></div><div class="rail-step"><i>03</i><span>接收反馈</span></div><a class="rail-step practice-link" href="./student-practice.html" target="_blank" rel="noopener"><i>✦</i><span>题库练习</span></a><div class="student-rail-foot"><span id="studentAvatar">S</span><small id="studentRailName"></small></div></aside>
     <main class="student-main">
       <header class="student-header"><div><p class="eyebrow">STUDENT DESK</p><h1 id="studentGreeting">你好</h1><p>把老师布置的题目，完成成一次清晰、有节奏的表达。</p></div><div class="header-actions"><button class="icon-button" id="studentRefreshBtn" title="刷新">↻</button><button class="button quiet" data-logout>退出登录</button></div></header>
       <section class="student-stats" id="studentStats"></section>
@@ -63,10 +59,16 @@
     </main>
   </section>
 
+  <section class="admin-app hidden" id="adminApp">
+    <aside class="admin-sidebar"><div class="admin-brand"><span>IS</span><div><b>Speaking Studio</b><small>ADMIN CENTER</small></div></div><div class="admin-nav"><a href="#adminOverview">平台总览</a><a href="#adminInvite">教师邀请码</a><a href="#adminUsers">用户管理</a></div><div class="admin-account"><span id="adminAvatar">A</span><div><b id="adminRailName"></b><small>管理员账号</small></div><button data-logout title="退出登录">↪</button></div></aside>
+    <main class="admin-main"><header class="admin-header" id="adminOverview"><div><p class="eyebrow">ADMIN CENTER</p><h1 id="adminGreeting">平台管理</h1><p>集中管理账号，并控制教师注册邀请码。</p></div><button class="button quiet" id="adminRefreshBtn">↻ 刷新数据</button></header><section class="admin-metrics" id="adminMetrics"></section><section class="admin-section invite-section" id="adminInvite"><div class="section-heading"><div><p class="eyebrow">TEACHER INVITE</p><h2>教师邀请码</h2><p>教师只有填写正确的邀请码才能完成注册。</p></div></div><form id="adminInviteForm" class="admin-inline-form"><label>当前邀请码<input id="adminTeacherInviteCode" minlength="4" maxlength="64" required></label><button class="button primary" type="submit">保存邀请码</button></form></section><section class="admin-section user-management" id="adminUsers"><div class="section-heading"><div><p class="eyebrow">USER MANAGEMENT</p><h2>新增、查看与删除用户</h2><p>删除会同时移除账号及其关联的题目、作业、提交和反馈。</p></div></div><div class="admin-user-layout"><form id="adminCreateUserForm" class="admin-create-form"><h3>新增用户</h3><label>用户名称<input id="adminNewDisplayName" maxlength="40" placeholder="例如：王老师" required></label><label>账号<input id="adminNewUsername" maxlength="24" placeholder="3–24 位字母、数字或 _" required></label><label>身份<select id="adminNewRole"><option value="student">学生</option><option value="teacher">教师</option></select></label><label>初始密码<input id="adminNewPassword" type="password" minlength="6" placeholder="至少 6 位" required></label><button class="button orange" type="submit">创建账号</button></form><div class="admin-user-catalog"><div class="catalog-head"><h3>全部用户</h3><input id="adminUserSearch" placeholder="搜索姓名或账号"></div><div id="adminUserList" class="admin-user-list"></div></div></div></section></main>
+  </section>
+
   <div class="toast" id="toast"></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
   <script src="./supabase-config.js"></script>
   <script src="./app.js"></script>
+  <script src="./platform-enhancements.js"></script>
 </body>
 </html>

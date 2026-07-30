@@ -1,7 +1,7 @@
 const config = window.SUPABASE_CONFIG || {};
 const supabaseFactory = window.supabase;
 const mediaBucket = "speaking-media";
-const entryRole = ["teacher", "student"].includes(new URLSearchParams(window.location.search).get("entry")) ? new URLSearchParams(window.location.search).get("entry") : "";
+const entryRole = ["admin", "teacher", "student"].includes(new URLSearchParams(window.location.search).get("entry")) ? new URLSearchParams(window.location.search).get("entry") : "";
 const $ = id => document.getElementById(id);
 const state = {
   client: null,
@@ -27,7 +27,9 @@ const state = {
   feedbackVoiceBlob: null,
   feedbackVoiceUrl: "",
   feedbackTimer: null,
-  feedbackSeconds: 0
+  feedbackSeconds: 0,
+  adminUsers: [],
+  platformSettings: null
 };
 
 function escapeHtml(value) {
@@ -36,6 +38,7 @@ function escapeHtml(value) {
 
 function toast(message) {
   const node = $("toast");
+  if (!node) return;
   node.textContent = message;
   node.classList.add("show");
   clearTimeout(toast.timer);
@@ -44,6 +47,7 @@ function toast(message) {
 
 function authMessage(message, success = false) {
   const node = $("authMessage");
+  if (!node) return;
   node.textContent = message;
   node.style.color = success ? "#08795d" : "#be5739";
 }
@@ -91,9 +95,10 @@ function assignmentSnapshot(raw) {
 }
 
 function showOnly(view) {
-  $("authPage").classList.toggle("hidden", view !== "auth");
-  $("studentApp").classList.toggle("hidden", view !== "student");
-  $("teacherApp").classList.toggle("hidden", view !== "teacher");
+  if ($("authPage")) $("authPage").classList.toggle("hidden", view !== "auth");
+  if ($("studentApp")) $("studentApp").classList.toggle("hidden", view !== "student");
+  if ($("teacherApp")) $("teacherApp").classList.toggle("hidden", view !== "teacher");
+  if ($("adminApp")) $("adminApp").classList.toggle("hidden", view !== "admin");
 }
 
 async function getSignedUrl(path) {
@@ -125,12 +130,15 @@ async function signUp(event) {
   const username = $("signUpAccount").value.trim().toLowerCase();
   const password = $("signUpPassword").value;
   const role = entryRole || $("signUpRole").value;
+  const registrationCode = role === "teacher" ? $("signUpTeacherInvite")?.value.trim() : role === "admin" ? $("signUpAdminSetupCode")?.value.trim() : "";
   if (!/^[a-z0-9_]{3,24}$/i.test(username)) { authMessage("账号需为 3–24 位字母、数字或下划线。"); return; }
   if (password.length < 6) { authMessage("密码至少需要 6 位。"); return; }
-  const result = await state.client.auth.signUp({email: accountEmail(username), password, options:{data:{username, display_name:displayName, role}}});
+  if ((role === "teacher" || role === "admin") && !registrationCode) { authMessage(role === "teacher" ? "请填写教师邀请码。" : "请填写管理员初始化码。"); return; }
+  const result = await state.client.auth.signUp({email: accountEmail(username), password, options:{data:{username, display_name:displayName, role, registration_code:registrationCode}}});
   if (result.error) { authMessage(result.error.message.includes("already registered") ? "该账号已存在。" : result.error.message); return; }
   if (!result.data.session) { authMessage("账号已创建。若项目开启了邮箱确认，请在 Supabase 关闭 Confirm email 后再登录。", true); return; }
-  authMessage("注册成功。", true);
+  authMessage("注册成功，正在进入工作台。", true);
+  if ($("registrationPage")) window.location.replace("./index.html");
 }
 
 async function loadProfile() {
@@ -142,13 +150,24 @@ async function loadProfile() {
 async function enterWorkspace() {
   try {
     await loadProfile();
+    if ($("registrationPage")) {
+      window.location.replace("./index.html");
+      return;
+    }
     if (entryRole && state.profile.role !== entryRole) {
-      authMessage(`此入口仅允许${entryRole === "teacher" ? "教师" : "学生"}账号登录。`);
+      const roleName = {admin:"管理员", teacher:"教师", student:"学生"}[entryRole];
+      authMessage(`此入口仅允许${roleName}账号登录。`);
       await state.client.auth.signOut();
       showOnly("auth");
       return;
     }
-    if (state.profile.role === "teacher") {
+    if (state.profile.role === "admin") {
+      showOnly("admin");
+      $("adminGreeting").textContent = `${state.profile.display_name}，平台一切尽在掌握`;
+      $("adminRailName").textContent = state.profile.display_name;
+      $("adminAvatar").textContent = state.profile.display_name.slice(0, 1);
+      await loadAdminData();
+    } else if (state.profile.role === "teacher") {
       showOnly("teacher");
       $("teacherGreeting").textContent = `${state.profile.display_name}，今天也辛苦了`;
       $("teacherRailName").textContent = state.profile.display_name;
@@ -190,6 +209,84 @@ async function loadTeacherData() {
   state.submissions = (submissions.data || []).map(submission => ({...submission, feedback:Array.isArray(submission.feedbacks) ? submission.feedbacks[0] : submission.feedbacks || null, student:state.students.find(student => student.id === submission.student_id)}));
   state.assignments = state.assignments.map(assignment => ({...assignment, submissions:state.submissions.filter(submission => submission.assignment_id === assignment.id)}));
   renderTeacher();
+}
+
+async function loadAdminData() {
+  const [users, settings] = await Promise.all([
+    state.client.from("profiles").select("id,username,display_name,role,created_at").order("created_at", {ascending:false}),
+    state.client.from("platform_settings").select("teacher_invite_code,updated_at").eq("singleton", true).single()
+  ]);
+  const failed = [users, settings].find(result => result.error);
+  if (failed) { toast(failed.error.message); return; }
+  state.adminUsers = users.data || [];
+  state.platformSettings = settings.data;
+  renderAdmin();
+}
+
+function roleLabel(role) {
+  return {admin:"管理员", teacher:"教师", student:"学生"}[role] || role;
+}
+
+function renderAdmin() {
+  const users = state.adminUsers;
+  const teachers = users.filter(user => user.role === "teacher").length;
+  const students = users.filter(user => user.role === "student").length;
+  $("adminMetrics").innerHTML = `<article class="admin-metric"><small>全部账号</small><b>${users.length}</b><small>平台当前用户</small></article><article class="admin-metric"><small>教师账号</small><b>${teachers}</b><small>可建立题库与作业</small></article><article class="admin-metric"><small>学生账号</small><b>${students}</b><small>可进入题库练习</small></article><article class="admin-metric"><small>教师邀请码</small><b>已启用</b><small>${state.platformSettings?.updated_at ? `更新于 ${formatDate(state.platformSettings.updated_at)}` : "等待加载"}</small></article>`;
+  $("adminTeacherInviteCode").value = state.platformSettings?.teacher_invite_code || "";
+  renderAdminUsers();
+}
+
+function renderAdminUsers() {
+  const query = $("adminUserSearch").value.trim().toLowerCase();
+  const users = state.adminUsers.filter(user => `${user.display_name} ${user.username}`.toLowerCase().includes(query));
+  $("adminUserList").innerHTML = users.length ? users.map(user => `<article class="admin-user-row"><div class="admin-user-avatar ${user.role}">${escapeHtml(user.display_name.slice(0, 1))}</div><div><b>${escapeHtml(user.display_name)}</b><small>@${escapeHtml(user.username)} · ${roleLabel(user.role)}</small></div><time>${formatDate(user.created_at)}</time>${user.role === "admin" ? `<span class="admin-protected">受保护</span>` : `<button class="tiny-button delete" data-admin-user-delete="${user.id}" type="button">删除</button>`}</article>`).join("") : `<div class="empty">没有匹配的用户。</div>`;
+}
+
+async function saveTeacherInvite(event) {
+  event.preventDefault();
+  const code = $("adminTeacherInviteCode").value.trim();
+  if (code.length < 4 || code.length > 64) { toast("邀请码长度需为 4–64 位。"); return; }
+  const result = await state.client.from("platform_settings").update({teacher_invite_code:code}).eq("singleton", true);
+  if (result.error) { toast(result.error.message); return; }
+  toast("教师邀请码已更新。");
+  await loadAdminData();
+}
+
+async function createManagedUser(event) {
+  event.preventDefault();
+  const result = await state.client.rpc("admin_create_user", {
+    p_username: $("adminNewUsername").value.trim(),
+    p_display_name: $("adminNewDisplayName").value.trim(),
+    p_role: $("adminNewRole").value,
+    p_password: $("adminNewPassword").value
+  });
+  if (result.error) { toast(result.error.message); return; }
+  $("adminCreateUserForm").reset();
+  toast("账号已创建。");
+  await loadAdminData();
+}
+
+async function deleteManagedUser(userId) {
+  const user = state.adminUsers.find(item => item.id === userId);
+  if (!user || !window.confirm(`确认删除 ${user.display_name} 的账号吗？此操作无法恢复。`)) return;
+  const result = await state.client.rpc("admin_delete_user", {p_user_id:userId});
+  if (result.error) { toast(result.error.message); return; }
+  toast("账号已删除。");
+  await loadAdminData();
+}
+
+function setRegistrationRole(role) {
+  if (!$("signUpRole")) return;
+  $("signUpRole").value = role;
+  document.querySelectorAll("[data-registration-role]").forEach(button => button.classList.toggle("active", button.dataset.registrationRole === role));
+  $("teacherInviteField")?.classList.toggle("hidden", role !== "teacher");
+  $("adminSetupField")?.classList.toggle("hidden", role !== "admin");
+  const notes = {
+    student:"学生账号创建后即可使用题库练习和老师布置的任务。",
+    teacher:"教师账号需验证邀请码，验证通过后可建立题库、布置作业和批改。",
+    admin:"管理员只在平台首次初始化时开放。创建成功后，初始化入口会自动锁定。"
+  };
+  if ($("registrationNote")) $("registrationNote").textContent = notes[role];
 }
 
 function renderStudent() {
@@ -476,43 +573,55 @@ async function signOut() {
 }
 
 function bindEvents() {
-  $("signInForm").addEventListener("submit", signIn);
-  $("signUpForm").addEventListener("submit", signUp);
+  if ($("signInForm")) $("signInForm").addEventListener("submit", signIn);
+  if ($("signUpForm")) $("signUpForm").addEventListener("submit", signUp);
   document.querySelectorAll("[data-logout]").forEach(button => button.addEventListener("click", signOut));
-  $("studentRefreshBtn").addEventListener("click", loadStudentData);
-  $("teacherRefreshBtn").addEventListener("click", loadTeacherData);
+  if ($("studentRefreshBtn")) $("studentRefreshBtn").addEventListener("click", loadStudentData);
+  if ($("teacherRefreshBtn")) $("teacherRefreshBtn").addEventListener("click", loadTeacherData);
   document.querySelectorAll("[data-student-mode]").forEach(button => button.addEventListener("click", () => setStudentMode(button.dataset.studentMode)));
-  $("studentAssignmentSelect").addEventListener("change", event => { state.selectedAssignmentId = event.target.value; renderStudentAssignment(); });
-  $("studentRecordBtn").addEventListener("click", toggleStudentRecording);
-  $("studentSubmitBtn").addEventListener("click", submitStudentRecording);
-  $("questionForm").addEventListener("submit", saveQuestion);
-  $("questionResetBtn").addEventListener("click", resetQuestionForm);
-  $("questionSearch").addEventListener("input", renderTeacherQuestions);
-  $("teacherQuestionList").addEventListener("click", event => { const edit = event.target.closest("[data-question-edit]"); const remove = event.target.closest("[data-question-delete]"); if (edit) editQuestion(edit.dataset.questionEdit); if (remove) deleteQuestion(remove.dataset.questionDelete); });
-  $("wordImportBtn").addEventListener("click", importQuestions);
-  $("assignmentQuestionSearch").addEventListener("input", renderAssignmentPicker);
-  $("assignmentQuestionPicker").addEventListener("change", event => { const input = event.target.closest("[data-assignment-question]"); if (!input) return; if (input.checked) state.selectedQuestionIds.add(input.dataset.assignmentQuestion); else state.selectedQuestionIds.delete(input.dataset.assignmentQuestion); renderAssignmentPicker(); });
-  $("assignmentForm").addEventListener("submit", createAssignment);
-  $("teacherSubmissionList").addEventListener("click", event => { const row = event.target.closest("[data-submission-id]"); if (!row) return; state.selectedSubmissionId = row.dataset.submissionId; state.feedbackVoiceBlob = null; state.feedbackVoiceUrl = ""; renderTeacherSubmissions(); });
-  $("teacherReviewPanel").addEventListener("click", event => { if (event.target.id === "teacherVoiceBtn") toggleFeedbackRecording(); if (event.target.id === "teacherSendFeedback") sendFeedback(); });
+  if ($("studentAssignmentSelect")) $("studentAssignmentSelect").addEventListener("change", event => { state.selectedAssignmentId = event.target.value; renderStudentAssignment(); });
+  if ($("studentRecordBtn")) $("studentRecordBtn").addEventListener("click", toggleStudentRecording);
+  if ($("studentSubmitBtn")) $("studentSubmitBtn").addEventListener("click", submitStudentRecording);
+  if ($("questionForm")) $("questionForm").addEventListener("submit", saveQuestion);
+  if ($("questionResetBtn")) $("questionResetBtn").addEventListener("click", resetQuestionForm);
+  if ($("questionSearch")) $("questionSearch").addEventListener("input", renderTeacherQuestions);
+  if ($("teacherQuestionList")) $("teacherQuestionList").addEventListener("click", event => { const edit = event.target.closest("[data-question-edit]"); const remove = event.target.closest("[data-question-delete]"); if (edit) editQuestion(edit.dataset.questionEdit); if (remove) deleteQuestion(remove.dataset.questionDelete); });
+  if ($("wordImportBtn")) $("wordImportBtn").addEventListener("click", importQuestions);
+  if ($("assignmentQuestionSearch")) $("assignmentQuestionSearch").addEventListener("input", renderAssignmentPicker);
+  if ($("assignmentQuestionPicker")) $("assignmentQuestionPicker").addEventListener("change", event => { const input = event.target.closest("[data-assignment-question]"); if (!input) return; if (input.checked) state.selectedQuestionIds.add(input.dataset.assignmentQuestion); else state.selectedQuestionIds.delete(input.dataset.assignmentQuestion); renderAssignmentPicker(); });
+  if ($("assignmentForm")) $("assignmentForm").addEventListener("submit", createAssignment);
+  if ($("teacherSubmissionList")) $("teacherSubmissionList").addEventListener("click", event => { const row = event.target.closest("[data-submission-id]"); if (!row) return; state.selectedSubmissionId = row.dataset.submissionId; state.feedbackVoiceBlob = null; state.feedbackVoiceUrl = ""; renderTeacherSubmissions(); });
+  if ($("teacherReviewPanel")) $("teacherReviewPanel").addEventListener("click", event => { if (event.target.id === "teacherVoiceBtn") toggleFeedbackRecording(); if (event.target.id === "teacherSendFeedback") sendFeedback(); });
+  if ($("adminRefreshBtn")) $("adminRefreshBtn").addEventListener("click", loadAdminData);
+  if ($("adminInviteForm")) $("adminInviteForm").addEventListener("submit", saveTeacherInvite);
+  if ($("adminCreateUserForm")) $("adminCreateUserForm").addEventListener("submit", createManagedUser);
+  if ($("adminUserSearch")) $("adminUserSearch").addEventListener("input", renderAdminUsers);
+  if ($("adminUserList")) $("adminUserList").addEventListener("click", event => { const button = event.target.closest("[data-admin-user-delete]"); if (button) deleteManagedUser(button.dataset.adminUserDelete); });
+  document.querySelectorAll("[data-registration-role]").forEach(button => button.addEventListener("click", () => setRegistrationRole(button.dataset.registrationRole)));
 }
 
 async function init() {
   bindEvents();
   if (entryRole) {
-    $("signUpRole").value = entryRole;
-    $("signUpRole").disabled = true;
-    document.title = `IELTS Speaking Studio · ${entryRole === "teacher" ? "教师端" : "学生端"}`;
+    if ($("signUpRole")) {
+      setRegistrationRole(entryRole);
+      document.querySelectorAll("[data-registration-role]").forEach(button => { button.disabled = true; });
+    }
+    document.title = `IELTS Speaking Studio · ${{admin:"管理员", teacher:"教师", student:"学生"}[entryRole]}端`;
+  } else if ($("signUpRole")) {
+    setRegistrationRole($("signUpRole").value);
   }
   if (!config.url || !config.anonKey || !supabaseFactory?.createClient) {
-    $("connectionBanner").textContent = "请先配置 Supabase 项目 URL 和 anon key；当前页面仅显示设计稿。";
-    $("connectionBanner").classList.remove("hidden");
+    if ($("connectionBanner")) {
+      $("connectionBanner").textContent = "请先配置 Supabase 项目 URL 和 anon key；当前页面仅显示设计稿。";
+      $("connectionBanner").classList.remove("hidden");
+    }
     return;
   }
   state.client = supabaseFactory.createClient(config.url, config.anonKey);
   const sessionResult = await state.client.auth.getSession();
   if (sessionResult.data.session) { state.session = sessionResult.data.session; await enterWorkspace(); }
-  state.client.auth.onAuthStateChange(async (_event, session) => { if (!session) { showOnly("auth"); return; } state.session = session; await enterWorkspace(); });
+  state.client.auth.onAuthStateChange(async (_event, session) => { if (!session) { if (!$("registrationPage")) showOnly("auth"); return; } state.session = session; await enterWorkspace(); });
 }
 
 init();
