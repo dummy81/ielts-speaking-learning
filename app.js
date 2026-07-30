@@ -129,11 +129,12 @@ async function signUp(event) {
   const displayName = $("signUpName").value.trim();
   const username = $("signUpAccount").value.trim().toLowerCase();
   const password = $("signUpPassword").value;
-  const role = entryRole || $("signUpRole").value;
-  const registrationCode = role === "teacher" ? $("signUpTeacherInvite")?.value.trim() : role === "admin" ? $("signUpAdminSetupCode")?.value.trim() : "";
+  const role = $("signUpRole").value;
+  const registrationCode = role === "teacher" ? $("signUpTeacherInvite")?.value.trim() : "";
+  if (!["student", "teacher"].includes(role)) { authMessage("只支持创建学生或教师账号。"); return; }
   if (!/^[a-z0-9_]{3,24}$/i.test(username)) { authMessage("账号需为 3–24 位字母、数字或下划线。"); return; }
   if (password.length < 6) { authMessage("密码至少需要 6 位。"); return; }
-  if ((role === "teacher" || role === "admin") && !registrationCode) { authMessage(role === "teacher" ? "请填写教师邀请码。" : "请填写管理员初始化码。"); return; }
+  if (role === "teacher" && !registrationCode) { authMessage("请填写教师邀请码。"); return; }
   const result = await state.client.auth.signUp({email: accountEmail(username), password, options:{data:{username, display_name:displayName, role, registration_code:registrationCode}}});
   if (result.error) { authMessage(result.error.message.includes("already registered") ? "该账号已存在。" : result.error.message); return; }
   if (!result.data.session) { authMessage("账号已创建。若项目开启了邮箱确认，请在 Supabase 关闭 Confirm email 后再登录。", true); return; }
@@ -280,11 +281,9 @@ function setRegistrationRole(role) {
   $("signUpRole").value = role;
   document.querySelectorAll("[data-registration-role]").forEach(button => button.classList.toggle("active", button.dataset.registrationRole === role));
   $("teacherInviteField")?.classList.toggle("hidden", role !== "teacher");
-  $("adminSetupField")?.classList.toggle("hidden", role !== "admin");
   const notes = {
     student:"学生账号创建后即可使用题库练习和老师布置的任务。",
-    teacher:"教师账号需验证邀请码，验证通过后可建立题库、布置作业和批改。",
-    admin:"管理员只在平台首次初始化时开放。创建成功后，初始化入口会自动锁定。"
+    teacher:"教师账号需验证邀请码，验证通过后可建立题库、布置作业和批改。"
   };
   if ($("registrationNote")) $("registrationNote").textContent = notes[role];
 }
@@ -602,15 +601,8 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
-  if (entryRole) {
-    if ($("signUpRole")) {
-      setRegistrationRole(entryRole);
-      document.querySelectorAll("[data-registration-role]").forEach(button => { button.disabled = true; });
-    }
-    document.title = `IELTS Speaking Studio · ${{admin:"管理员", teacher:"教师", student:"学生"}[entryRole]}端`;
-  } else if ($("signUpRole")) {
-    setRegistrationRole($("signUpRole").value);
-  }
+  if ($("signUpRole")) setRegistrationRole("student");
+  if (entryRole && !$("signUpRole")) document.title = `IELTS Speaking Studio · ${{admin:"管理员", teacher:"教师", student:"学生"}[entryRole]}端`;
   if (!config.url || !config.anonKey || !supabaseFactory?.createClient) {
     if ($("connectionBanner")) {
       $("connectionBanner").textContent = "请先配置 Supabase 项目 URL 和 anon key；当前页面仅显示设计稿。";
