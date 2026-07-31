@@ -354,7 +354,6 @@ function renderStudent() {
   $("studentAssignmentSelect").disabled = !assignments.length;
   $("studentRecordBtn").disabled = !assignments.length;
   $("studentSubmitBtn").disabled = !assignments.length;
-  $("studentSubmitBtn").textContent = assignments.some(assignment => assignment.submissions?.length) ? "重新提交给老师" : "提交给老师";
   renderStudentAssignment();
   renderStudentFeedback();
 }
@@ -364,6 +363,7 @@ function renderStudentAssignment() {
   const latestSubmission = assignment?.submissions?.[0];
   $("studentAssignmentDue").textContent = assignment ? `截止 ${formatDateTime(assignment.due_at)}` : "";
   $("recordStatusTag").textContent = assignment ? statusInfo(assignment).label : "请选择作业";
+  $("studentSubmitBtn").textContent = latestSubmission ? "重新提交给老师" : "提交给老师";
   $("studentAssignmentQuestions").innerHTML = assignment ? `<h3>${escapeHtml(assignment.title)}</h3><ol>${(assignment.questions || []).map(question => `<li><strong>${escapeHtml(question.part || "口语题")}</strong>${question.topic_label ? ` <span class="topic-label-inline">P2 · ${escapeHtml(question.topic_label)}</span>` : ""} · ${escapeHtml(question.title || "未命名题目")}<br>${escapeHtml(question.prompt || "")}${question.p3_questions?.length ? `<br><small>关联 P3：${question.p3_questions.length} 道追问</small>` : ""}${question.student_version ? `<div class="student-version"><b>老师为你准备的定制讲义</b><br>${escapeHtml(question.student_version)}</div>` : ""}</li>`).join("")}</ol>` : "选择作业后，这里会显示题目。";
   if (!$('studentRecordStatus')?.classList.contains('recording')) {
     $("studentRecordStatus").textContent = latestSubmission
