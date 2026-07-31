@@ -14,6 +14,7 @@ const state = {
   selectedAssignmentId: "",
   selectedSubmissionId: "",
   selectedQuestionIds: new Set(),
+  selectedLibraryQuestionIds: new Set(),
   studentMode: "audio",
   recording: null,
   recorder: null,
@@ -77,15 +78,18 @@ function statusInfo(assignment) {
   return {label:"待完成", className:""};
 }
 
-function questionSnapshot(raw) {
-  return {
+function questionSnapshot(raw, includeAnswers = true) {
+  const snapshot = {
     id: raw.id,
     part: raw.part,
     title: raw.title,
     prompt: raw.prompt,
     tags: Array.isArray(raw.tags) ? raw.tags : String(raw.tags || "").split(",").map(item => item.trim()).filter(Boolean),
-    p3_questions: Array.isArray(raw.p3_questions) ? raw.p3_questions : String(raw.p3 || "").split("\n").map(item => item.trim()).filter(Boolean)
+    p3_questions: Array.isArray(raw.p3_questions) ? raw.p3_questions : String(raw.p3 || "").split("\n").map(item => item.trim()).filter(Boolean),
+    student_version: String(raw.student_version || "")
   };
+  if (includeAnswers) snapshot.answer_notes = String(raw.answer_notes || "");
+  return snapshot;
 }
 
 function assignmentSnapshot(raw) {
@@ -288,6 +292,45 @@ function setRegistrationRole(role) {
   if ($("registrationNote")) $("registrationNote").textContent = notes[role];
 }
 
+function installTeacherQuestionBankControls() {
+  const form = $("questionForm");
+  if (!form || $("questionAnswers")) return;
+  const formGrid = form.querySelector(".form-grid");
+  const answerLabel = document.createElement("label");
+  answerLabel.className = "wide";
+  answerLabel.textContent = "参考答案 / 课堂讲解（仅教师可见）";
+  const answerField = document.createElement("textarea");
+  answerField.id = "questionAnswers";
+  answerField.placeholder = "导入时会自动识别答案。这里的内容不会随作业发给学生。";
+  answerLabel.append(answerField);
+  formGrid.append(answerLabel);
+
+  const importHelp = document.createElement("p");
+  importHelp.className = "import-help";
+  importHelp.textContent = "P2 / P3 导入：每个 Describe / Talk about 题干会成为一个主题；You should say 与小提示会归入 Cue Card，Answer / 参考答案后的内容会保存为教师答案。";
+  form.querySelector(".word-import")?.after(importHelp);
+
+  const catalog = form.parentElement?.querySelector(".question-catalog");
+  const catalogHead = catalog?.querySelector(".catalog-head");
+  if (catalogHead && !$("deleteSelectedQuestionsBtn")) {
+    const selectionBar = document.createElement("div");
+    selectionBar.className = "library-selection-bar";
+    selectionBar.innerHTML = '<span id="librarySelectionCount">已选 0 题</span><button class="tiny-button delete" id="deleteSelectedQuestionsBtn" type="button" disabled>批量删除</button>';
+    catalogHead.after(selectionBar);
+  }
+
+  const teacherNav = document.querySelector(".teacher-nav");
+  if (teacherNav && !teacherNav.querySelector("[data-classroom-link]")) {
+    const classroomLink = document.createElement("a");
+    classroomLink.href = "./teacher-classroom.html";
+    classroomLink.target = "_blank";
+    classroomLink.rel = "noopener";
+    classroomLink.dataset.classroomLink = "true";
+    classroomLink.textContent = "课堂展示 ↗";
+    teacherNav.append(classroomLink);
+  }
+}
+
 function renderStudent() {
   const assignments = state.assignments;
   const submitted = assignments.filter(assignment => assignment.submissions?.length).length;
@@ -310,7 +353,7 @@ function renderStudentAssignment() {
   const assignment = state.assignments.find(item => item.id === state.selectedAssignmentId);
   $("studentAssignmentDue").textContent = assignment ? `截止 ${formatDateTime(assignment.due_at)}` : "";
   $("recordStatusTag").textContent = assignment ? statusInfo(assignment).label : "请选择作业";
-  $("studentAssignmentQuestions").innerHTML = assignment ? `<h3>${escapeHtml(assignment.title)}</h3><ol>${(assignment.questions || []).map(question => `<li><strong>${escapeHtml(question.part || "口语题")}</strong> · ${escapeHtml(question.title || "未命名题目")}<br>${escapeHtml(question.prompt || "")}${question.p3_questions?.length ? `<br><small>关联 P3：${question.p3_questions.length} 道追问</small>` : ""}</li>`).join("")}</ol>` : "选择作业后，这里会显示题目。";
+  $("studentAssignmentQuestions").innerHTML = assignment ? `<h3>${escapeHtml(assignment.title)}</h3><ol>${(assignment.questions || []).map(question => `<li><strong>${escapeHtml(question.part || "口语题")}</strong> · ${escapeHtml(question.title || "未命名题目")}<br>${escapeHtml(question.prompt || "")}${question.p3_questions?.length ? `<br><small>关联 P3：${question.p3_questions.length} 道追问</small>` : ""}${question.student_version ? `<div class="student-version"><b>老师为你准备的定制讲义</b><br>${escapeHtml(question.student_version)}</div>` : ""}</li>`).join("")}</ol>` : "选择作业后，这里会显示题目。";
 }
 
 async function renderStudentFeedback() {
@@ -388,7 +431,11 @@ function renderTeacher() {
 function renderTeacherQuestions() {
   const search = $("questionSearch").value.trim().toLowerCase();
   const questions = state.questions.filter(question => !search || [question.title, question.prompt, question.part, ...(question.tags || [])].join(" ").toLowerCase().includes(search));
-  $("teacherQuestionList").innerHTML = questions.length ? questions.map(question => `<article class="question-row"><div class="question-row-top"><span><span class="part-pill ${question.part === "Part 2 & 3" ? "p2" : ""}">${escapeHtml(question.part)}</span><b>${escapeHtml(question.title)}</b></span><span class="tag-pill">${escapeHtml((question.tags || []).join(" · ") || "未分类")}</span></div><p>${escapeHtml(question.prompt)}</p>${question.p3_questions?.length ? `<p>关联 P3：${question.p3_questions.length} 道追问</p>` : ""}<div class="row-actions"><button class="tiny-button" data-question-edit="${question.id}" type="button">编辑</button><button class="tiny-button delete" data-question-delete="${question.id}" type="button">删除</button></div></article>`).join("") : `<div class="empty">没有匹配题目。可以手动新增或导入 Word。</div>`;
+  const validIds = new Set(state.questions.map(question => question.id));
+  state.selectedLibraryQuestionIds = new Set([...state.selectedLibraryQuestionIds].filter(id => validIds.has(id)));
+  $("librarySelectionCount").textContent = `已选 ${state.selectedLibraryQuestionIds.size} 题`;
+  $("deleteSelectedQuestionsBtn").disabled = !state.selectedLibraryQuestionIds.size;
+  $("teacherQuestionList").innerHTML = questions.length ? questions.map(question => `<article class="question-row"><div class="question-row-top"><label class="question-select"><input type="checkbox" data-library-question="${question.id}" ${state.selectedLibraryQuestionIds.has(question.id) ? "checked" : ""}><span class="sr-only">选择 ${escapeHtml(question.title)}</span></label><span><span class="part-pill ${question.part === "Part 2 & 3" ? "p2" : ""}">${escapeHtml(question.part)}</span><b>${escapeHtml(question.title)}</b></span><span class="tag-pill">${escapeHtml((question.tags || []).join(" · ") || "未分类")}</span></div><p>${escapeHtml(question.prompt)}</p>${question.p3_questions?.length ? `<p>关联 P3：${question.p3_questions.length} 道追问</p>` : ""}${question.answer_notes ? `<p class="answer-indicator">含参考答案 / 讲解</p>` : ""}<div class="row-actions"><button class="tiny-button" data-question-edit="${question.id}" type="button">编辑</button><button class="tiny-button delete" data-question-delete="${question.id}" type="button">删除</button></div></article>`).join("") : `<div class="empty">没有匹配题目。可以手动新增或导入 Word。</div>`;
 }
 
 function renderAssignmentPicker() {
@@ -432,7 +479,7 @@ function scoreOptions(value) {
 
 async function saveQuestion(event) {
   event.preventDefault();
-  const payload = {teacher_id:state.profile.id, part:$("questionPart").value, title:$("questionTitle").value.trim(), prompt:$("questionPrompt").value.trim(), tags:$("questionTags").value.split(",").map(item => item.trim()).filter(Boolean), p3_questions:$("questionP3").value.split("\n").map(item => item.trim()).filter(Boolean)};
+  const payload = {teacher_id:state.profile.id, part:$("questionPart").value, title:$("questionTitle").value.trim(), prompt:$("questionPrompt").value.trim(), tags:$("questionTags").value.split(",").map(item => item.trim()).filter(Boolean), p3_questions:$("questionP3").value.split("\n").map(item => item.trim()).filter(Boolean), answer_notes:$("questionAnswers").value.trim()};
   if (!payload.title || !payload.prompt) { toast("请填写题目名称和题干。"); return; }
   const editingId = $("editingQuestionId").value;
   const result = editingId ? await state.client.from("questions").update(payload).eq("id", editingId).eq("teacher_id", state.profile.id) : await state.client.from("questions").insert(payload);
@@ -449,6 +496,7 @@ function resetQuestionForm() {
   $("questionTitle").value = "";
   $("questionPrompt").value = "";
   $("questionP3").value = "";
+  $("questionAnswers").value = "";
   $("questionSaveBtn").textContent = "保存题目";
 }
 
@@ -461,6 +509,7 @@ function editQuestion(id) {
   $("questionTitle").value = question.title;
   $("questionPrompt").value = question.prompt;
   $("questionP3").value = (question.p3_questions || []).join("\n");
+  $("questionAnswers").value = question.answer_notes || "";
   $("questionSaveBtn").textContent = "保存修改";
   document.querySelector("#questionBank").scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -475,21 +524,138 @@ async function deleteQuestion(id) {
   toast("题目已删除。");
 }
 
+async function deleteSelectedQuestions() {
+  const ids = [...state.selectedLibraryQuestionIds];
+  if (!ids.length) return;
+  if (!window.confirm(`确认删除选中的 ${ids.length} 道题目吗？已布置作业中的题目快照不会受影响。`)) return;
+  const result = await state.client.from("questions").delete().in("id", ids).eq("teacher_id", state.profile.id);
+  if (result.error) { toast(result.error.message); return; }
+  state.selectedLibraryQuestionIds.clear();
+  await loadTeacherData();
+  toast(`已删除 ${ids.length} 道题目。`);
+}
+
 function parseImportedQuestions(text, part) {
-  const normalized = text.replace(/\r/g, "").replace(/\t/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-  if (!normalized) return [];
-  if (part === "Part 1") {
-    let topic = "";
-    return normalized.split("\n").map(line => line.trim()).filter(Boolean).filter(line => !/^P(?:art)?\s*1\b/i.test(line)).flatMap(line => {
-      if (!/[?？]/.test(line)) { topic = line; return []; }
-      return [{part:"Part 1", title:topic || line.replace(/[?？].*/, "").slice(0, 48) || "Part 1 question", prompt:line, tags:topic ? [topic] : [], p3_questions:[]}];
-    });
-  }
-  return normalized.split(/\n\s*\n|(?=^\s*(?:Describe|Talk about)\b)/im).map(block => block.trim()).filter(Boolean).map(block => {
-    const lines = block.split("\n").map(line => line.trim()).filter(line => line && !/^P(?:art)?\s*[23]\b/i.test(line));
-    const prompt = lines.join(" ");
-    return {part:"Part 2 & 3", title:lines[0]?.replace(/^Describe\s+/i, "").slice(0, 60) || "Part 2 & 3 question", prompt, tags:[], p3_questions:[]};
+  const lines = text.replace(/\r/g, "").replace(/\t/g, " ").replace(/\n{3,}/g, "\n\n").split("\n").map(cleanImportedLine).filter(Boolean);
+  if (!lines.length) return [];
+  return part === "Part 1" ? parseImportedPartOne(lines) : parseImportedPartTwoAndThree(lines);
+}
+
+function cleanImportedLine(line) {
+  return line.replace(/\u00a0/g, " ").replace(/^\s*(?:\d+[.)、]|[A-Za-z][.)、]|[•·▪◦-])\s*/, "").replace(/\s+/g, " ").trim();
+}
+
+function isPartMarker(line, part) {
+  return new RegExp(`^(?:part|p)\\s*${part}(?:\\b|$)|^第[一二三]部分`, "i").test(line.replace(/\s+/g, ""));
+}
+
+function isAnswerMarker(line) {
+  return /^(?:sample\s*)?answer(?:s)?\s*[:：]?$|^(?:参考答案|答案|回答|范文|讲解)\s*[:：]?$/i.test(line.trim());
+}
+
+function isPartTwoStart(line) {
+  return /^(?:describe|talk about|tell me about)\b/i.test(line) || /^(?:描述|请描述|谈谈|说说|介绍|讲述)/.test(line);
+}
+
+function isCueCardLine(line) {
+  const value = line.trim();
+  return /^(?:you should(?: say| mention| explain)?|and explain|and say|and describe|where|when|who|what|why|how|whether)\b/i.test(value) || /^(?:你应该说|你需要说|并解释|在哪里|什么时候|谁|什么|为什么|如何)/.test(value) || /[:：]$/.test(value);
+}
+
+function isCompleteQuestion(line) {
+  const value = line.trim();
+  return /[?？]$/.test(value) || /^(?:do|does|did|is|are|was|were|can|could|would|will|have|has|had|should|what|where|when|who|which|why|how)\b/i.test(value);
+}
+
+function isShortTopicLabel(line) {
+  return !isCompleteQuestion(line) && !isPartTwoStart(line) && !isCueCardLine(line) && !isAnswerMarker(line) && line.length <= 80;
+}
+
+function parseImportedPartOne(lines) {
+  const questions = [];
+  let topic = "";
+  let current = null;
+  const pushCurrent = () => { if (current) questions.push(current); current = null; };
+  lines.forEach(line => {
+    if (isPartMarker(line, 1)) return;
+    if (isCompleteQuestion(line)) {
+      pushCurrent();
+      current = {part:"Part 1", title:topic || line.replace(/[?？].*/, "").slice(0, 48) || "Part 1 question", prompt:line, tags:topic ? [topic] : [], p3_questions:[], answer_notes:""};
+      return;
+    }
+    if (!current && isShortTopicLabel(line)) { topic = line; return; }
+    if (current) current.answer_notes = [current.answer_notes, line].filter(Boolean).join("\n");
   });
+  pushCurrent();
+  return questions;
+}
+
+function parseImportedPartTwoAndThree(lines) {
+  const topics = [];
+  let pendingLabels = [];
+  let current = null;
+  let section = "p2";
+  const pushCurrent = () => {
+    if (!current) return;
+    const p2 = splitPromptAndAnswers(current.p2Lines);
+    const p3 = splitP3QuestionsAndAnswers(current.p3Lines);
+    const title = current.label || current.p2Lines.find(isPartTwoStart)?.replace(/^(?:describe|talk about|tell me about)\s+/i, "").slice(0, 80) || "Part 2 & 3 question";
+    const answerSections = [];
+    if (p2.answers) answerSections.push(`Part 2 参考答案\n${p2.answers}`);
+    if (p3.answers) answerSections.push(`Part 3 参考答案\n${p3.answers}`);
+    topics.push({part:"Part 2 & 3", title, prompt:p2.prompt || current.p2Lines.join("\n"), tags:current.label ? [current.label] : [], p3_questions:p3.questions, answer_notes:answerSections.join("\n\n")});
+    current = null;
+  };
+  lines.forEach(line => {
+    if (isPartMarker(line, 3) || /^follow[- ]?up questions?\b/i.test(line)) { if (current) section = "p3"; return; }
+    if (isPartMarker(line, 2)) { section = "p2"; return; }
+    if (isPartTwoStart(line)) {
+      pushCurrent();
+      current = {label:pendingLabels[0] || "", p2Lines:[line], p3Lines:[]};
+      pendingLabels = [];
+      section = "p2";
+      return;
+    }
+    if (!current) { if (isShortTopicLabel(line)) pendingLabels.push(line); return; }
+    (section === "p3" ? current.p3Lines : current.p2Lines).push(line);
+  });
+  pushCurrent();
+  return topics;
+}
+
+function splitPromptAndAnswers(lines) {
+  const prompt = [];
+  const answers = [];
+  let collectingAnswer = false;
+  lines.forEach(line => {
+    if (isAnswerMarker(line)) { collectingAnswer = true; return; }
+    if (collectingAnswer || (!isPartTwoStart(line) && !isCueCardLine(line))) answers.push(line);
+    else prompt.push(line);
+  });
+  return {prompt:prompt.join("\n"), answers:answers.join("\n")};
+}
+
+function splitP3QuestionsAndAnswers(lines) {
+  const questions = [];
+  const answers = [];
+  let currentQuestion = "";
+  let currentAnswer = [];
+  let collectingAnswer = false;
+  const pushCurrent = () => {
+    if (!currentQuestion) return;
+    questions.push(currentQuestion);
+    if (currentAnswer.length) answers.push(`Q: ${currentQuestion}\n${currentAnswer.join("\n")}`);
+    currentQuestion = "";
+    currentAnswer = [];
+  };
+  lines.forEach(line => {
+    if (isAnswerMarker(line)) { collectingAnswer = true; return; }
+    if (isCompleteQuestion(line)) { pushCurrent(); currentQuestion = line; collectingAnswer = false; return; }
+    if (currentQuestion) { currentAnswer.push(line); collectingAnswer = true; }
+    else if (collectingAnswer) answers.push(line);
+  });
+  pushCurrent();
+  return {questions, answers:answers.join("\n\n")};
 }
 
 async function importQuestions() {
@@ -518,7 +684,7 @@ async function createAssignment(event) {
   const dueValue = $("assignmentDue").value;
   const assignmentResult = await state.client.from("assignments").insert({teacher_id:state.profile.id, student_id:studentId, title, instructions:$("assignmentInstructions").value.trim(), due_at:dueValue ? new Date(dueValue).toISOString() : null}).select().single();
   if (assignmentResult.error) { toast(assignmentResult.error.message); return; }
-  const rows = selectedQuestions.map((question, index) => ({assignment_id:assignmentResult.data.id, question_id:question.id, question_snapshot:questionSnapshot(question), position:index}));
+  const rows = selectedQuestions.map((question, index) => ({assignment_id:assignmentResult.data.id, question_id:question.id, question_snapshot:questionSnapshot(question, false), position:index}));
   const questionResult = await state.client.from("assignment_questions").insert(rows);
   if (questionResult.error) { await state.client.from("assignments").delete().eq("id", assignmentResult.data.id); toast(questionResult.error.message); return; }
   state.selectedQuestionIds.clear();
@@ -584,7 +750,11 @@ function bindEvents() {
   if ($("questionForm")) $("questionForm").addEventListener("submit", saveQuestion);
   if ($("questionResetBtn")) $("questionResetBtn").addEventListener("click", resetQuestionForm);
   if ($("questionSearch")) $("questionSearch").addEventListener("input", renderTeacherQuestions);
-  if ($("teacherQuestionList")) $("teacherQuestionList").addEventListener("click", event => { const edit = event.target.closest("[data-question-edit]"); const remove = event.target.closest("[data-question-delete]"); if (edit) editQuestion(edit.dataset.questionEdit); if (remove) deleteQuestion(remove.dataset.questionDelete); });
+  if ($("teacherQuestionList")) {
+    $("teacherQuestionList").addEventListener("click", event => { const edit = event.target.closest("[data-question-edit]"); const remove = event.target.closest("[data-question-delete]"); if (edit) editQuestion(edit.dataset.questionEdit); if (remove) deleteQuestion(remove.dataset.questionDelete); });
+    $("teacherQuestionList").addEventListener("change", event => { const input = event.target.closest("[data-library-question]"); if (!input) return; if (input.checked) state.selectedLibraryQuestionIds.add(input.dataset.libraryQuestion); else state.selectedLibraryQuestionIds.delete(input.dataset.libraryQuestion); renderTeacherQuestions(); });
+  }
+  if ($("deleteSelectedQuestionsBtn")) $("deleteSelectedQuestionsBtn").addEventListener("click", deleteSelectedQuestions);
   if ($("wordImportBtn")) $("wordImportBtn").addEventListener("click", importQuestions);
   if ($("assignmentQuestionSearch")) $("assignmentQuestionSearch").addEventListener("input", renderAssignmentPicker);
   if ($("assignmentQuestionPicker")) $("assignmentQuestionPicker").addEventListener("change", event => { const input = event.target.closest("[data-assignment-question]"); if (!input) return; if (input.checked) state.selectedQuestionIds.add(input.dataset.assignmentQuestion); else state.selectedQuestionIds.delete(input.dataset.assignmentQuestion); renderAssignmentPicker(); });
@@ -600,6 +770,7 @@ function bindEvents() {
 }
 
 async function init() {
+  installTeacherQuestionBankControls();
   bindEvents();
   if ($("signUpRole")) setRegistrationRole("student");
   if (entryRole && !$("signUpRole")) document.title = `IELTS Speaking Studio · ${{admin:"管理员", teacher:"教师", student:"学生"}[entryRole]}端`;

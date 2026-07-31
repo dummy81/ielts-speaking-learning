@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a48">
+  <title>课堂展示 · IELTS Speaking Studio</title>
+  <link rel="stylesheet" href="./teacher-classroom.css">
+  <link rel="stylesheet" href="./teacher-classroom-send.css">
+</head>
+<body>
+  <main class="classroom-shell">
+    <aside class="classroom-sidebar">
+      <div class="classroom-brand"><span>IS</span><div><b>Speaking Studio</b><small>CLASSROOM MODE</small></div></div>
+      <h2>课堂题库</h2><p>选择一个话题，即可进入适合投屏的展示模式。</p>
+      <input id="classroomSearch" type="search" placeholder="搜索题目或标签">
+      <select id="classroomPart"><option value="all">全部题目</option><option value="Part 1">Part 1</option><option value="Part 2 & 3">Part 2 &amp; 3</option></select>
+      <div class="classroom-topic-list" id="classroomTopicList"></div>
+      <a class="classroom-back" href="./index.html">← 返回教师工作台</a>
+    </aside>
+    <section class="classroom-main">
+      <header class="classroom-header"><div><p class="eyebrow">TEACHER CLASSROOM</p><h1>课堂展示</h1><p id="classroomStatus">正在读取你的题库…</p></div><div class="classroom-actions"><button class="classroom-button" id="classroomToggleAnswers" type="button">显示参考答案</button><button class="classroom-button primary" id="classroomFullscreen" type="button">全屏投屏</button></div></header>
+      <section class="classroom-stage"><article class="classroom-card" id="classroomCard"><div class="classroom-empty"><b>正在加载题库</b><span>请稍候</span></div></article></section>
+      <section class="classroom-send-panel" aria-labelledby="classroomSendTitle">
+        <div class="classroom-send-heading"><div><p class="eyebrow">STUDENT HANDOUT</p><h2 id="classroomSendTitle">为当前题目准备学生版讲义</h2></div><span class="classroom-send-note">仅发送给所选学生，不修改题库中的固定参考答案</span></div>
+        <div class="classroom-send-grid">
+          <label>发送给学生<select id="classroomStudent"><option value="">正在加载学生…</option></select></label>
+          <label class="classroom-send-editor">定制内容<textarea id="classroomStudentVersion" rows="5" placeholder="可根据学生的薄弱点编辑词组、句型、思路或纠错提醒…"></textarea></label>
+        </div>
+        <div class="classroom-send-footer"><span id="classroomSendStatus">切换题目后可编辑本题的学生版讲义。</span><button class="classroom-button primary" id="classroomSendVersion" type="button">发送给该学生</button></div>
+      </section>
+      <footer class="classroom-footer"><span id="classroomCounter"></span><div><button class="classroom-button" id="classroomPrevious" type="button">← 上一题</button><button class="classroom-button" id="classroomNext" type="button">下一题 →</button></div></footer>
+    </section>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./supabase-config.js"></script>
+  <script src="./teacher-classroom.js"></script>
+</body>
+</html>
