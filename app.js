@@ -354,15 +354,22 @@ function renderStudent() {
   $("studentAssignmentSelect").disabled = !assignments.length;
   $("studentRecordBtn").disabled = !assignments.length;
   $("studentSubmitBtn").disabled = !assignments.length;
+  $("studentSubmitBtn").textContent = assignments.some(assignment => assignment.submissions?.length) ? "重新提交给老师" : "提交给老师";
   renderStudentAssignment();
   renderStudentFeedback();
 }
 
 function renderStudentAssignment() {
   const assignment = state.assignments.find(item => item.id === state.selectedAssignmentId);
+  const latestSubmission = assignment?.submissions?.[0];
   $("studentAssignmentDue").textContent = assignment ? `截止 ${formatDateTime(assignment.due_at)}` : "";
   $("recordStatusTag").textContent = assignment ? statusInfo(assignment).label : "请选择作业";
   $("studentAssignmentQuestions").innerHTML = assignment ? `<h3>${escapeHtml(assignment.title)}</h3><ol>${(assignment.questions || []).map(question => `<li><strong>${escapeHtml(question.part || "口语题")}</strong>${question.topic_label ? ` <span class="topic-label-inline">P2 · ${escapeHtml(question.topic_label)}</span>` : ""} · ${escapeHtml(question.title || "未命名题目")}<br>${escapeHtml(question.prompt || "")}${question.p3_questions?.length ? `<br><small>关联 P3：${question.p3_questions.length} 道追问</small>` : ""}${question.student_version ? `<div class="student-version"><b>老师为你准备的定制讲义</b><br>${escapeHtml(question.student_version)}</div>` : ""}</li>`).join("")}</ol>` : "选择作业后，这里会显示题目。";
+  if (!$('studentRecordStatus')?.classList.contains('recording')) {
+    $("studentRecordStatus").textContent = latestSubmission
+      ? `已提交${latestSubmission.media_type === "video" ? "视频" : "语音"}。可以重新录制，新的文件会替换本次作业的旧提交。`
+      : assignment ? "选择语音或视频模式，点击开始录制。" : "选择作业后，可以录制语音或视频。";
+  }
 }
 
 async function renderStudentFeedback() {
@@ -413,19 +420,31 @@ async function submitStudentRecording() {
   const assignment = state.assignments.find(item => item.id === state.selectedAssignmentId);
   if (!assignment) { toast("请先选择一项作业。"); return; }
   if (!state.recording) { toast("请先完成语音或视频录制。"); return; }
+  const previousSubmissions = assignment.submissions || [];
   const extension = state.recording.type === "video" ? "webm" : "webm";
   const path = `${state.profile.id}/${assignment.id}/${crypto.randomUUID()}.${extension}`;
   const upload = await state.client.storage.from(mediaBucket).upload(path, state.recording.blob, {contentType:state.recording.blob.type || `${state.recording.type}/webm`});
   if (upload.error) { toast(upload.error.message); return; }
   const result = await state.client.from("submissions").insert({assignment_id:assignment.id, student_id:state.profile.id, media_type:state.recording.type, media_path:path, duration_seconds:state.recording.duration, reflection:$("studentReflection").value.trim()});
-  if (result.error) { toast(result.error.message); return; }
+  if (result.error) { await state.client.storage.from(mediaBucket).remove([path]); toast(result.error.message); return; }
+  const previousIds = previousSubmissions.map(submission => submission.id).filter(Boolean);
+  const previousPaths = previousSubmissions.map(submission => submission.media_path).filter(pathName => pathName && pathName !== path);
+  let cleanupWarning = "";
+  if (previousIds.length) {
+    const cleanup = await state.client.from("submissions").delete().in("id", previousIds).eq("student_id", state.profile.id);
+    if (cleanup.error) cleanupWarning = "新提交已保存，但旧版本清理失败，请稍后刷新重试。";
+    else if (previousPaths.length) {
+      const storageCleanup = await state.client.storage.from(mediaBucket).remove(previousPaths);
+      if (storageCleanup.error) cleanupWarning = "新提交已保存，但旧媒体文件清理失败。";
+    }
+  }
   state.recording = null;
   $("studentReflection").value = "";
   $("studentMediaPreview").classList.remove("show");
   $("studentMediaPreview").innerHTML = "";
   $("studentRecordBtn").textContent = "● 开始录制";
-  $("studentRecordStatus").textContent = "已提交，老师可以在教师端查看。";
-  toast("作业提交成功。");
+  $("studentRecordStatus").textContent = cleanupWarning || "已提交，老师可以在教师端查看；再次提交会替换当前文件。";
+  toast(cleanupWarning || (previousIds.length ? "重新提交成功，旧文件已替换。" : "作业提交成功。"));
   await loadStudentData();
 }
 
