@@ -27,9 +27,9 @@ function syncStudentVersionDraft() {
 function renderClassroomList() {
   const query = classroom$("classroomSearch").value.trim().toLowerCase();
   const part = classroom$("classroomPart").value;
-  classroomState.filtered = classroomState.questions.filter(question => (part === "all" || question.part === part) && (!query || [question.title, question.prompt, ...(question.tags || [])].join(" ").toLowerCase().includes(query)));
+  classroomState.filtered = classroomState.questions.filter(question => (part === "all" || question.part === part) && (!query || [question.title, question.prompt, question.topic_label, ...(question.tags || [])].join(" ").toLowerCase().includes(query)));
   if (!classroomState.filtered.some(question => question.id === classroomState.currentId)) classroomState.currentId = classroomState.filtered[0]?.id || "";
-  classroom$("classroomTopicList").innerHTML = classroomState.filtered.length ? classroomState.filtered.map(question => `<button class="classroom-topic ${question.id === classroomState.currentId ? "active" : ""}" data-classroom-question="${question.id}" type="button"><span>${classroomEscape(question.part)}</span><b>${classroomEscape(question.title)}</b></button>`).join("") : '<div class="classroom-empty"><b>没有匹配题目</b><span>更换筛选条件或返回题库添加题目。</span></div>';
+  classroom$("classroomTopicList").innerHTML = classroomState.filtered.length ? classroomState.filtered.map(question => `<button class="classroom-topic ${question.id === classroomState.currentId ? "active" : ""}" data-classroom-question="${question.id}" type="button"><span>${classroomEscape(question.part)}${question.topic_label ? ` · P2 ${classroomEscape(question.topic_label)}` : ""}</span><b>${classroomEscape(question.title)}</b></button>`).join("") : '<div class="classroom-empty"><b>没有匹配题目</b><span>更换筛选条件或返回题库添加题目。</span></div>';
   renderClassroomCard();
 }
 
@@ -46,7 +46,7 @@ function renderClassroomCard() {
   const prompt = promptLines.map((line, lineIndex) => `<p class="${lineIndex && classroomCue(line) ? "cue" : ""}">${classroomEscape(line)}</p>`).join("");
   const p3 = (question.p3_questions || []).filter(Boolean);
   const answer = classroomState.answersVisible && question.answer_notes ? `<section class="classroom-answers"><b>参考答案 / 课堂讲解</b>\n${classroomEscape(question.answer_notes)}</section>` : "";
-  card.innerHTML = `<span class="classroom-part">${classroomEscape(question.part)}</span><h2>${classroomEscape(question.title)}</h2><section class="classroom-prompt">${prompt}</section>${p3.length ? `<section class="classroom-p3"><h3>PART 3 · FOLLOW-UP QUESTIONS</h3>${p3.map(item => `<p>${classroomEscape(item)}</p>`).join("")}</section>` : ""}${answer}`;
+  card.innerHTML = `<span class="classroom-part">${classroomEscape(question.part)}</span>${question.topic_label ? `<span class="classroom-topic-label">P2 · ${classroomEscape(question.topic_label)}</span>` : ""}<h2>${classroomEscape(question.title)}</h2><section class="classroom-prompt">${prompt}</section>${p3.length ? `<section class="classroom-p3"><h3>PART 3 · FOLLOW-UP QUESTIONS</h3>${p3.map(item => `<p>${classroomEscape(item)}</p>`).join("")}</section>` : ""}${answer}`;
 }
 
 async function loadClassroom() {
@@ -57,7 +57,7 @@ async function loadClassroom() {
   if (profileResult.error || profileResult.data?.role !== "teacher") { classroom$("classroomStatus").textContent = "课堂展示仅供教师账号使用。"; return; }
   classroomState.profile = profileResult.data;
   const [questionsResult, studentsResult] = await Promise.all([
-    classroomClient.from("questions").select("id,part,title,prompt,tags,p3_questions,answer_notes,created_at").eq("teacher_id", classroomState.profile.id).order("created_at", {ascending:false}),
+    classroomClient.from("questions").select("id,part,title,prompt,tags,topic_label,p3_questions,answer_notes,created_at").eq("teacher_id", classroomState.profile.id).order("created_at", {ascending:false}),
     classroomClient.from("profiles").select("id,display_name,username").eq("role", "student").order("display_name")
   ]);
   const failed = [questionsResult, studentsResult].find(result => result.error);
@@ -102,6 +102,7 @@ async function sendStudentVersion() {
     title: question.title,
     prompt: question.prompt,
     tags: Array.isArray(question.tags) ? question.tags : [],
+    topic_label: question.topic_label || "",
     p3_questions: Array.isArray(question.p3_questions) ? question.p3_questions : [],
     student_version: editedText
   };

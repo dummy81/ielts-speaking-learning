@@ -14,3 +14,4 @@
 .classroom-send-footer>span{color:#7b8da0;font-size:11px}
 .classroom-send-footer .classroom-button:disabled{cursor:wait;opacity:.65}
 @media(max-width:800px){.classroom-send-panel{padding:17px 15px}.classroom-send-heading{display:block}.classroom-send-note{display:block;margin-top:7px;text-align:left}.classroom-send-grid{grid-template-columns:1fr}.classroom-send-footer{align-items:flex-start;flex-direction:column}.classroom-send-footer .classroom-button{width:100%}}
+.classroom-topic-label{display:inline-flex;margin-left:8px;padding:4px 8px;border-radius:999px;color:#7b5523;background:#fff2d9;font-size:10px;font-weight:900;vertical-align:middle}

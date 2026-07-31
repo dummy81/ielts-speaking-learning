@@ -85,6 +85,7 @@ function questionSnapshot(raw, includeAnswers = true) {
     title: raw.title,
     prompt: raw.prompt,
     tags: Array.isArray(raw.tags) ? raw.tags : String(raw.tags || "").split(",").map(item => item.trim()).filter(Boolean),
+    topic_label: String(raw.topic_label || ""),
     p3_questions: Array.isArray(raw.p3_questions) ? raw.p3_questions : String(raw.p3 || "").split("\n").map(item => item.trim()).filter(Boolean),
     student_version: String(raw.student_version || "")
   };
@@ -296,6 +297,14 @@ function installTeacherQuestionBankControls() {
   const form = $("questionForm");
   if (!form || $("questionAnswers")) return;
   const formGrid = form.querySelector(".form-grid");
+  const topicLabel = document.createElement("label");
+  topicLabel.className = "p2-topic-label-field";
+  topicLabel.textContent = "P2 话题标签（可后补）";
+  const topicLabelField = document.createElement("input");
+  topicLabelField.id = "questionTopicLabel";
+  topicLabelField.placeholder = "人物 / 地点 / 物品 / 经历";
+  topicLabel.append(topicLabelField);
+  $("questionTags")?.closest("label")?.after(topicLabel);
   const answerLabel = document.createElement("label");
   answerLabel.className = "wide";
   answerLabel.textContent = "参考答案 / 课堂讲解（仅教师可见）";
@@ -315,7 +324,7 @@ function installTeacherQuestionBankControls() {
   if (catalogHead && !$("deleteSelectedQuestionsBtn")) {
     const selectionBar = document.createElement("div");
     selectionBar.className = "library-selection-bar";
-    selectionBar.innerHTML = '<span id="librarySelectionCount">已选 0 题</span><button class="tiny-button delete" id="deleteSelectedQuestionsBtn" type="button" disabled>批量删除</button>';
+    selectionBar.innerHTML = '<span id="librarySelectionCount">已选 0 题</span><div class="library-selection-actions"><button class="tiny-button" id="exportQuestionsBtn" type="button">导出 Word</button><button class="tiny-button delete" id="deleteSelectedQuestionsBtn" type="button" disabled>批量删除</button></div>';
     catalogHead.after(selectionBar);
   }
 
@@ -353,7 +362,7 @@ function renderStudentAssignment() {
   const assignment = state.assignments.find(item => item.id === state.selectedAssignmentId);
   $("studentAssignmentDue").textContent = assignment ? `截止 ${formatDateTime(assignment.due_at)}` : "";
   $("recordStatusTag").textContent = assignment ? statusInfo(assignment).label : "请选择作业";
-  $("studentAssignmentQuestions").innerHTML = assignment ? `<h3>${escapeHtml(assignment.title)}</h3><ol>${(assignment.questions || []).map(question => `<li><strong>${escapeHtml(question.part || "口语题")}</strong> · ${escapeHtml(question.title || "未命名题目")}<br>${escapeHtml(question.prompt || "")}${question.p3_questions?.length ? `<br><small>关联 P3：${question.p3_questions.length} 道追问</small>` : ""}${question.student_version ? `<div class="student-version"><b>老师为你准备的定制讲义</b><br>${escapeHtml(question.student_version)}</div>` : ""}</li>`).join("")}</ol>` : "选择作业后，这里会显示题目。";
+  $("studentAssignmentQuestions").innerHTML = assignment ? `<h3>${escapeHtml(assignment.title)}</h3><ol>${(assignment.questions || []).map(question => `<li><strong>${escapeHtml(question.part || "口语题")}</strong>${question.topic_label ? ` <span class="topic-label-inline">P2 · ${escapeHtml(question.topic_label)}</span>` : ""} · ${escapeHtml(question.title || "未命名题目")}<br>${escapeHtml(question.prompt || "")}${question.p3_questions?.length ? `<br><small>关联 P3：${question.p3_questions.length} 道追问</small>` : ""}${question.student_version ? `<div class="student-version"><b>老师为你准备的定制讲义</b><br>${escapeHtml(question.student_version)}</div>` : ""}</li>`).join("")}</ol>` : "选择作业后，这里会显示题目。";
 }
 
 async function renderStudentFeedback() {
@@ -430,18 +439,18 @@ function renderTeacher() {
 
 function renderTeacherQuestions() {
   const search = $("questionSearch").value.trim().toLowerCase();
-  const questions = state.questions.filter(question => !search || [question.title, question.prompt, question.part, ...(question.tags || [])].join(" ").toLowerCase().includes(search));
+  const questions = state.questions.filter(question => !search || [question.title, question.prompt, question.part, question.topic_label, ...(question.tags || [])].join(" ").toLowerCase().includes(search));
   const validIds = new Set(state.questions.map(question => question.id));
   state.selectedLibraryQuestionIds = new Set([...state.selectedLibraryQuestionIds].filter(id => validIds.has(id)));
   $("librarySelectionCount").textContent = `已选 ${state.selectedLibraryQuestionIds.size} 题`;
   $("deleteSelectedQuestionsBtn").disabled = !state.selectedLibraryQuestionIds.size;
-  $("teacherQuestionList").innerHTML = questions.length ? questions.map(question => `<article class="question-row"><div class="question-row-top"><label class="question-select"><input type="checkbox" data-library-question="${question.id}" ${state.selectedLibraryQuestionIds.has(question.id) ? "checked" : ""}><span class="sr-only">选择 ${escapeHtml(question.title)}</span></label><span><span class="part-pill ${question.part === "Part 2 & 3" ? "p2" : ""}">${escapeHtml(question.part)}</span><b>${escapeHtml(question.title)}</b></span><span class="tag-pill">${escapeHtml((question.tags || []).join(" · ") || "未分类")}</span></div><p>${escapeHtml(question.prompt)}</p>${question.p3_questions?.length ? `<p>关联 P3：${question.p3_questions.length} 道追问</p>` : ""}${question.answer_notes ? `<p class="answer-indicator">含参考答案 / 讲解</p>` : ""}<div class="row-actions"><button class="tiny-button" data-question-edit="${question.id}" type="button">编辑</button><button class="tiny-button delete" data-question-delete="${question.id}" type="button">删除</button></div></article>`).join("") : `<div class="empty">没有匹配题目。可以手动新增或导入 Word。</div>`;
+  $("teacherQuestionList").innerHTML = questions.length ? questions.map(question => `<article class="question-row"><div class="question-row-top"><label class="question-select"><input type="checkbox" data-library-question="${question.id}" ${state.selectedLibraryQuestionIds.has(question.id) ? "checked" : ""}><span class="sr-only">选择 ${escapeHtml(question.title)}</span></label><span><span class="part-pill ${question.part === "Part 2 & 3" ? "p2" : ""}">${escapeHtml(question.part)}</span><b>${escapeHtml(question.title)}</b></span><span class="tag-pill">${escapeHtml((question.tags || []).join(" · ") || "未分类")}</span>${question.topic_label ? `<span class="topic-label-pill">P2 · ${escapeHtml(question.topic_label)}</span>` : ""}</div><p>${escapeHtml(question.prompt)}</p>${question.p3_questions?.length ? `<p>关联 P3：${question.p3_questions.length} 道追问</p>` : ""}${question.answer_notes ? `<p class="answer-indicator">含参考答案 / 讲解</p>` : ""}<div class="row-actions"><button class="tiny-button" data-question-edit="${question.id}" type="button">编辑</button><button class="tiny-button delete" data-question-delete="${question.id}" type="button">删除</button></div></article>`).join("") : `<div class="empty">没有匹配题目。可以手动新增或导入 Word。</div>`;
 }
 
 function renderAssignmentPicker() {
   const search = $("assignmentQuestionSearch").value.trim().toLowerCase();
-  const questions = state.questions.filter(question => !search || [question.title, question.prompt, question.part, ...(question.tags || [])].join(" ").toLowerCase().includes(search));
-  $("assignmentQuestionPicker").innerHTML = questions.length ? questions.map(question => `<label class="picker-question"><input type="checkbox" data-assignment-question="${question.id}" ${state.selectedQuestionIds.has(question.id) ? "checked" : ""}><span><b>${escapeHtml(question.title)}</b><small>${escapeHtml(question.part)} · ${(question.tags || []).map(escapeHtml).join(" · ")}<br>${escapeHtml(question.prompt)}</small></span></label>`).join("") : `<div class="empty">没有匹配题目。</div>`;
+  const questions = state.questions.filter(question => !search || [question.title, question.prompt, question.part, question.topic_label, ...(question.tags || [])].join(" ").toLowerCase().includes(search));
+  $("assignmentQuestionPicker").innerHTML = questions.length ? questions.map(question => `<label class="picker-question"><input type="checkbox" data-assignment-question="${question.id}" ${state.selectedQuestionIds.has(question.id) ? "checked" : ""}><span><b>${escapeHtml(question.title)}${question.topic_label ? ` <em class="topic-label-inline">P2 · ${escapeHtml(question.topic_label)}</em>` : ""}</b><small>${escapeHtml(question.part)} · ${(question.tags || []).map(escapeHtml).join(" · ")}<br>${escapeHtml(question.prompt)}</small></span></label>`).join("") : `<div class="empty">没有匹配题目。</div>`;
   $("questionSelectionCount").textContent = `已选 ${state.selectedQuestionIds.size} 题`;
   $("assignmentPickerHint").textContent = state.selectedQuestionIds.size ? `将发送 ${state.selectedQuestionIds.size} 道题目` : "至少选择一道题目";
 }
@@ -479,7 +488,7 @@ function scoreOptions(value) {
 
 async function saveQuestion(event) {
   event.preventDefault();
-  const payload = {teacher_id:state.profile.id, part:$("questionPart").value, title:$("questionTitle").value.trim(), prompt:$("questionPrompt").value.trim(), tags:$("questionTags").value.split(",").map(item => item.trim()).filter(Boolean), p3_questions:$("questionP3").value.split("\n").map(item => item.trim()).filter(Boolean), answer_notes:$("questionAnswers").value.trim()};
+  const payload = {teacher_id:state.profile.id, part:$("questionPart").value, title:$("questionTitle").value.trim(), prompt:$("questionPrompt").value.trim(), tags:$("questionTags").value.split(",").map(item => item.trim()).filter(Boolean), topic_label:$("questionTopicLabel").value.trim(), p3_questions:$("questionP3").value.split("\n").map(item => item.trim()).filter(Boolean), answer_notes:$("questionAnswers").value.trim()};
   if (!payload.title || !payload.prompt) { toast("请填写题目名称和题干。"); return; }
   const editingId = $("editingQuestionId").value;
   const result = editingId ? await state.client.from("questions").update(payload).eq("id", editingId).eq("teacher_id", state.profile.id) : await state.client.from("questions").insert(payload);
@@ -493,6 +502,7 @@ function resetQuestionForm() {
   $("editingQuestionId").value = "";
   $("questionPart").value = "Part 1";
   $("questionTags").value = "";
+  $("questionTopicLabel").value = "";
   $("questionTitle").value = "";
   $("questionPrompt").value = "";
   $("questionP3").value = "";
@@ -506,6 +516,7 @@ function editQuestion(id) {
   $("editingQuestionId").value = question.id;
   $("questionPart").value = question.part;
   $("questionTags").value = (question.tags || []).join(", ");
+  $("questionTopicLabel").value = question.topic_label || "";
   $("questionTitle").value = question.title;
   $("questionPrompt").value = question.prompt;
   $("questionP3").value = (question.p3_questions || []).join("\n");
@@ -522,6 +533,64 @@ async function deleteQuestion(id) {
   state.selectedQuestionIds.delete(id);
   await loadTeacherData();
   toast("题目已删除。");
+}
+
+function loadDocxLibrary() {
+  if (window.docx) return Promise.resolve(window.docx);
+  if (window.docxLibraryPromise) return window.docxLibraryPromise;
+  window.docxLibraryPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/docx@9.6.1/dist/index.iife.js";
+    script.onload = () => window.docx ? resolve(window.docx) : reject(new Error("Word 导出组件加载失败。"));
+    script.onerror = () => reject(new Error("无法加载 Word 导出组件，请检查网络后重试。"));
+    document.head.append(script);
+  });
+  return window.docxLibraryPromise;
+}
+
+function wordTextParagraphs(docx, text) {
+  return String(text || "").split("\n").map(line => line.trim()).filter(Boolean).map(line => new docx.Paragraph({text:line, spacing:{after:80}}));
+}
+
+async function exportQuestionsToWord() {
+  const selectedIds = [...state.selectedLibraryQuestionIds];
+  const questions = selectedIds.length ? state.questions.filter(question => selectedIds.includes(question.id)) : state.questions;
+  if (!questions.length) { toast("题库中还没有可导出的题目。"); return; }
+  try {
+    const docx = await loadDocxLibrary();
+    const children = [
+      new docx.Paragraph({text:"IELTS Speaking Question Library", heading:docx.HeadingLevel.TITLE, spacing:{after:120}}),
+      new docx.Paragraph({text:`导出题目：${questions.length} 道${selectedIds.length ? "（已选题目）" : "（全部题目）"}`, spacing:{after:280}})
+    ];
+    questions.forEach((question, index) => {
+      children.push(new docx.Paragraph({text:`${index + 1}. ${question.title}`, heading:docx.HeadingLevel.HEADING_1, pageBreakBefore:index > 0}));
+      children.push(new docx.Paragraph({text:`考试部分：${question.part || "未设置"}`}));
+      if (question.topic_label) children.push(new docx.Paragraph({text:`P2 话题标签：${question.topic_label}`}));
+      if (question.tags?.length) children.push(new docx.Paragraph({text:`通用标签：${question.tags.join(" · ")}`}));
+      children.push(new docx.Paragraph({text:"题干 / Cue Card", heading:docx.HeadingLevel.HEADING_2}));
+      children.push(...wordTextParagraphs(docx, question.prompt));
+      if (question.p3_questions?.length) {
+        children.push(new docx.Paragraph({text:"Part 3 关联追问", heading:docx.HeadingLevel.HEADING_2}));
+        question.p3_questions.filter(Boolean).forEach(item => children.push(new docx.Paragraph({text:item, bullet:{level:0}, spacing:{after:80}})));
+      }
+      if (question.answer_notes) {
+        children.push(new docx.Paragraph({text:"教师参考答案 / 课堂讲解", heading:docx.HeadingLevel.HEADING_2}));
+        children.push(...wordTextParagraphs(docx, question.answer_notes));
+      }
+    });
+    const documentFile = new docx.Document({sections:[{children}]});
+    const blob = await docx.Packer.toBlob(documentFile);
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `IELTS_题库_${new Date().toISOString().slice(0, 10)}.docx`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    toast(`已导出 ${questions.length} 道题目为 Word 文件。`);
+  } catch (error) {
+    toast(error.message || "导出 Word 失败，请稍后重试。");
+  }
 }
 
 async function deleteSelectedQuestions() {
@@ -603,7 +672,7 @@ function parseImportedPartTwoAndThree(lines) {
     const answerSections = [];
     if (p2.answers) answerSections.push(`Part 2 参考答案\n${p2.answers}`);
     if (p3.answers) answerSections.push(`Part 3 参考答案\n${p3.answers}`);
-    topics.push({part:"Part 2 & 3", title, prompt:p2.prompt || current.p2Lines.join("\n"), tags:current.label ? [current.label] : [], p3_questions:p3.questions, answer_notes:answerSections.join("\n\n")});
+    topics.push({part:"Part 2 & 3", title, prompt:p2.prompt || current.p2Lines.join("\n"), tags:current.label ? [current.label] : [], topic_label:current.label || "", p3_questions:p3.questions, answer_notes:answerSections.join("\n\n")});
     current = null;
   };
   lines.forEach(line => {
@@ -755,6 +824,7 @@ function bindEvents() {
     $("teacherQuestionList").addEventListener("change", event => { const input = event.target.closest("[data-library-question]"); if (!input) return; if (input.checked) state.selectedLibraryQuestionIds.add(input.dataset.libraryQuestion); else state.selectedLibraryQuestionIds.delete(input.dataset.libraryQuestion); renderTeacherQuestions(); });
   }
   if ($("deleteSelectedQuestionsBtn")) $("deleteSelectedQuestionsBtn").addEventListener("click", deleteSelectedQuestions);
+  if ($("exportQuestionsBtn")) $("exportQuestionsBtn").addEventListener("click", exportQuestionsToWord);
   if ($("wordImportBtn")) $("wordImportBtn").addEventListener("click", importQuestions);
   if ($("assignmentQuestionSearch")) $("assignmentQuestionSearch").addEventListener("input", renderAssignmentPicker);
   if ($("assignmentQuestionPicker")) $("assignmentQuestionPicker").addEventListener("change", event => { const input = event.target.closest("[data-assignment-question]"); if (!input) return; if (input.checked) state.selectedQuestionIds.add(input.dataset.assignmentQuestion); else state.selectedQuestionIds.delete(input.dataset.assignmentQuestion); renderAssignmentPicker(); });
